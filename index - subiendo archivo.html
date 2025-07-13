@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mapa Conceptual desde CSV Local</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    #tree-container { width: 100%; height: 700px; border: 1px solid #ccc; margin-top: 20px; overflow: hidden; }
+    svg { width: 100%; height: 100%; }
+    .node circle { fill: #1f77b4; stroke: #fff; stroke-width: 2px; cursor: pointer; }
+    .node text { font: 18px sans-serif; pointer-events: none; }
+    .link { fill: none; stroke: #ccc; stroke-width: 2px; }
+  </style>
+</head>
+<body>
+
+<h2>Mapa Conceptual desde CSV Local</h2>
+<input type="file" id="fileInput" accept=".csv" />
+<button onclick="loadFromFile()">Cargar CSV y Generar Grafo</button>
+
+<div id="tree-container">
+  <svg id="tree"><g id="viewport"></g></svg>
+</div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+const width = 2000, height = 2000, marginTop = 300, marginLeft = 100;
+const treeLayout = d3.tree().nodeSize([70, 580]);
+const svg = d3.select("#tree").attr("viewBox", [0, 0, width, height]);
+const viewport = d3.select("#viewport");
+
+const zoom = d3.zoom().scaleExtent([0.5, 2])
+  .on("zoom", ({ transform }) => viewport.attr("transform", transform));
+svg.call(zoom);
+svg.call(zoom.transform, d3.zoomIdentity.translate(300, 100).scale(1.5));
+
+let rootNode = null;
+
+function collapse(d) {
+  if (d.children) {
+    d._children = d.children;
+    d._children.forEach(collapse);
+    d.children = null;
+  }
+}
+
+function findOrCreate(parent, name) {
+  if (!parent.children) parent.children = [];
+  let existing = parent.children.find(c => c.name === name);
+  if (!existing) {
+    existing = { name, children: [] };
+    parent.children.push(existing);
+  }
+  return existing;
+}
+
+function update(source) {
+  treeLayout(source);
+
+  const nodes = source.descendants();
+  const links = source.links();
+
+  viewport.selectAll(".link").remove();
+  viewport.selectAll(".node").remove();
+
+  viewport.selectAll(".link")
+    .data(links)
+    .enter()
+    .append("path")
+    .attr("class", "link")
+    .attr("d", d3.linkHorizontal()
+      .x(d => d.y + marginLeft)
+      .y(d => d.x + marginTop)
+    );
+
+  const node = viewport.selectAll(".node")
+    .data(nodes, d => d.data.name + "-" + d.depth)
+    .enter()
+    .append("g")
+    .attr("class", "node")
+    .attr("transform", d => `translate(${d.y + marginLeft},${d.x + marginTop})`)
+    .on("click", (event, d) => {
+      if (d.children) {
+        d._children = d.children;
+        d.children = null;
+      } else if (d._children) {
+        d.children = d._children;
+        d._children = null;
+      }
+      update(rootNode);
+    });
+
+  node.append("circle").attr("r", 20);
+  node.append("text")
+    .attr("dy", 5)
+    .attr("x", d => d.children || d._children ? -25 : 25)
+    .style("text-anchor", d => d.children || d._children ? "end" : "start")
+    .text(d => d.data.name)
+    .style("font-size", "18px");
+}
+
+function loadFromFile() {
+  const input = document.getElementById('fileInput');
+  if (!input.files.length) {
+    alert("Por favor seleccioná un archivo CSV primero.");
+    return;
+  }
+  const file = input.files[0];
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    try {
+      const data = d3.csvParse(text);
+
+      const treeData = { name: "Principal", children: [] };
+
+      data.forEach(row => {
+        const vendedor = row["Vendedor"]?.trim() || "Sin Vendedor";
+        const fecha = row["Fecha de Status"]?.trim() || "Sin Fecha";
+        const cliente = row["Cliente"]?.trim() || "Sin Cliente";
+        const pais = row["País"]?.trim() || "Sin País";
+        const tipo = row["Tipo de Proyecto"]?.trim() || "Sin Tipo";
+        const estado = row["Estado"]?.trim() || "Sin Estado";
+        const responsable = row["Responsable"]?.trim() || "Sin Responsable";
+        const status = row["Status"]?.trim() || "Sin Status";
+
+        const vendedorNode = findOrCreate(treeData, vendedor);
+        const fechaNode = findOrCreate(vendedorNode, fecha);
+        const clienteNode = findOrCreate(fechaNode, cliente);
+
+        [pais, tipo, estado, responsable, status].forEach(nombre => {
+          if (!clienteNode.children.find(c => c.name === nombre)) {
+            clienteNode.children.push({ name: nombre, children: [] });
+          }
+        });
+      });
+
+      rootNode = d3.hierarchy(treeData);
+      rootNode.x0 = height / 2;
+      rootNode.y0 = 0;
+      rootNode.children.forEach(collapse);
+      update(rootNode);
+
+    } catch (error) {
+      alert("Error al procesar CSV: " + error);
+    }
+  };
+  reader.readAsText(file);
+}
+</script>
+
+</body>
+</html>
