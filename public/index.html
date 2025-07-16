@@ -143,13 +143,13 @@ function update(source) {
       update(rootNode);
     });
 
-  node.append("circle").attr("r", 20);
+  node.append("circle").attr("r", 30);
   node.append("text")
     .attr("dy", 5)
     .attr("x", d => d.children || d._children ? -25 : 25)
     .style("text-anchor", d => d.children || d._children ? "end" : "start")
     .text(d => d.data.name)
-    .style("font-size", "18px");
+    .style("font-size", "24px");
 }
 
 function loadFromFile() {
