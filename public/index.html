@@ -133,32 +133,29 @@ function focusOnNode(d) {
       .scale(scale));
 }
 
+// ---- Tree Layout con separación dinámica ----
 const treeLayout = d3.tree();
 
 function update(source) {
   const allNodes = rootNode.descendants();
   const maxNodeWidth = Math.max(...allNodes.map(rectWidth));
 
-  // 🔥 Espaciado horizontal base (como antes)
-  treeLayout.nodeSize([70, maxNodeWidth + 120]);
+  // 🔥 Nueva separación dinámica
+  treeLayout
+    .nodeSize([1, maxNodeWidth + 120])
+    .separation((a, b) => {
+      if (a.parent === b.parent) {
+        const aHeight = splitText(a.data.name).length * 20 + 30;
+        const bHeight = splitText(b.data.name).length * 20 + 30;
+        return (aHeight + bHeight) / 70; // separación proporcional
+      }
+      return 1.5; // ramas distintas más separadas
+    });
+
   treeLayout(rootNode);
 
-  // ✅ 🔥 Ajuste dinámico VERTICAL por nodo hijo
-  rootNode.eachAfter(d => {
-    if (d.children && d.children.length > 1) {
-      let offset = 0;
-      d.children.forEach(child => {
-        const height = splitText(child.data.name).length * 20 + 10;
-        child.x += offset;
-        offset += height + 30; // 30px de margen vertical
-      });
-    }
-  });
-
-  const nodes = rootNode.descendants();
-  const links = rootNode.links();
-
   // ---- LINKS ----
+  const links = rootNode.links();
   const link = viewport.selectAll(".link").data(links, d => d.target.id);
 
   link.exit().transition().duration(750).style("opacity", 0).remove();
@@ -176,6 +173,7 @@ function update(source) {
     });
 
   // ---- NODES ----
+  const nodes = rootNode.descendants();
   const node = viewport.selectAll(".node").data(nodes, d => d.id || (d.id = ++i));
 
   const nodeEnter = node.enter()
@@ -234,7 +232,7 @@ function update(source) {
     d.y0 = d.y;
   });
 
-  // 🔥 Zoom inicial solo al cargar todo
+  // 🔥 Zoom inicial al cargar todo
   if (source === rootNode) {
     const box = viewport.node().getBBox();
     const scale = Math.min(
