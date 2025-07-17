@@ -79,7 +79,14 @@ svg.call(zoom);
 
 let rootNode = null;
 let i = 0;
-const MAX_CHARS_PER_LINE = 40;
+
+// 🔧 Ajustá acá los caracteres por línea y márgenes
+const MAX_CHARS_PER_LINE = 45;
+const CHAR_WIDTH = 9;
+const LINE_HEIGHT = 20;
+const RECT_MARGIN_H = 40;
+const RECT_MARGIN_V = 10;
+const EXTRA_VERTICAL_GAP = 20;
 
 function splitText(text, maxChars = MAX_CHARS_PER_LINE) {
   const regex = new RegExp(`.{1,${maxChars}}`, 'g');
@@ -87,14 +94,12 @@ function splitText(text, maxChars = MAX_CHARS_PER_LINE) {
 }
 
 function rectWidth(d) {
-  const lines = splitText(d.data.name);
-  const maxLine = Math.max(...lines.map(l => l.length));
-  return maxLine * 9 + 40;
+  return MAX_CHARS_PER_LINE * CHAR_WIDTH + RECT_MARGIN_H;
 }
 
 function rectHeight(d) {
   const lines = splitText(d.data.name);
-  return lines.length * 20 + 10;
+  return lines.length * LINE_HEIGHT + RECT_MARGIN_V;
 }
 
 function findOrCreate(parent, name) {
@@ -132,11 +137,10 @@ function adjustVerticalSpacing(root) {
   root.eachAfter(node => {
     if (node.children && node.children.length > 1) {
       const siblings = node.children;
-      let yOffset = 0;
       siblings.forEach((child, idx) => {
         if (idx > 0) {
           const prev = siblings[idx - 1];
-          const gap = (rectHeight(prev) + rectHeight(child)) / 2 + 20; 
+          const gap = rectHeight(prev) / 2 + rectHeight(child) / 2 + EXTRA_VERTICAL_GAP;
           child.x = prev.x + gap;
         }
       });
@@ -145,13 +149,8 @@ function adjustVerticalSpacing(root) {
 }
 
 function update(source) {
-  const allNodes = rootNode.descendants();
-  const maxNodeWidth = Math.max(...allNodes.map(rectWidth));
-
-  treeLayout.nodeSize([70, maxNodeWidth + 120]);
+  treeLayout.nodeSize([70, rectWidth(source) + 120]);
   treeLayout(rootNode);
-
-  // 🔥 Ajuste vertical dinámico para hermanos
   adjustVerticalSpacing(rootNode);
 
   const links = rootNode.links();
@@ -202,7 +201,7 @@ function update(source) {
     lines.forEach((line, i) => {
       g.append("text")
         .attr("x", 10)
-        .attr("y", i * 20 + 20)
+        .attr("y", i * LINE_HEIGHT + 20)
         .text(line);
     });
   });
