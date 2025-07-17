@@ -2,8 +2,8 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Mapa Conceptual Mejorado</title>
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&display=swap" rel="stylesheet">
+  <title>Mapa Conceptual con Layout Flexible</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&display=swap" rel="stylesheet" />
   <style>
     body {
       font-family: 'Nunito', sans-serif;
@@ -11,7 +11,9 @@
       color: #fff;
       margin: 20px;
     }
-    h2 { color: #bb86fc; }
+    h2 {
+      color: #bb86fc;
+    }
     input, button {
       background: #1e1e1e;
       color: #fff;
@@ -48,171 +50,236 @@
   </style>
 </head>
 <body>
-<h2>Mapa Conceptual Mejorado</h2>
-<input type="file" id="fileInput" accept=".csv">
-<button onclick="loadFromFile()">Cargar CSV</button>
-<div id="tree-container"><svg id="tree"><g id="viewport"></g></svg></div>
-<script src="https://d3js.org/d3.v7.min.js"></script>
-<script>
-const width = 2000, height = 2000;
-const svg = d3.select("#tree").attr("viewBox", [0, 0, width, height]);
-const viewport = d3.select("#viewport");
+  <h2>Mapa Conceptual con Layout Flexible</h2>
+  <input type="file" id="fileInput" accept=".csv" />
+  <button onclick="loadFromFile()">Cargar CSV</button>
+  <div id="tree-container">
+    <svg id="tree" width="100%" height="700">
+      <g id="viewport"></g>
+    </svg>
+  </div>
 
-const zoom = d3.zoom().scaleExtent([0.3, 3])
-  .on("zoom", ({transform}) => viewport.attr("transform", transform));
-svg.call(zoom);
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    const width = 2000;
+    const height = 2000;
 
-let rootNode = null, i = 0;
+    const svg = d3.select("#tree");
+    const viewport = d3.select("#viewport");
 
-// === CONFIGURACIÓN DE NODOS ===
-const MAX_CHARS_PER_LINE = 45;
-const CHAR_WIDTH = 9;
-const LINE_HEIGHT = 20;
-const RECT_MARGIN_H = 40;
-const RECT_MARGIN_V = 10;
+    const zoom = d3.zoom()
+      .scaleExtent([0.3, 3])
+      .on("zoom", (event) => viewport.attr("transform", event.transform));
 
-function splitText(text, maxChars=MAX_CHARS_PER_LINE){
-  const regex=new RegExp(`.{1,${maxChars}}`,'g');
-  return text.match(regex)||[];
-}
+    svg.call(zoom);
 
-function rectWidth(d){ 
-  // Ajuste dinámico para que los nodos largos tengan más ancho si es necesario
-  const lines = splitText(d.data.name);
-  const maxLine = Math.max(...lines.map(l => l.length));
-  return Math.max(maxLine * CHAR_WIDTH + RECT_MARGIN_H, MAX_CHARS_PER_LINE * CHAR_WIDTH + RECT_MARGIN_H);
-}
+    let rootNode = null, i = 0;
 
-function rectHeight(d){
-  const lines = splitText(d.data.name);
-  return lines.length*LINE_HEIGHT+RECT_MARGIN_V;
-}
+    const MAX_CHARS_PER_LINE = 45;
+    const CHAR_WIDTH = 9;
+    const LINE_HEIGHT = 20;
+    const RECT_MARGIN_H = 40;
+    const RECT_MARGIN_V = 10;
 
-function findOrCreate(parent, name){
-  if(!parent.children) parent.children=[];
-  let existing=parent.children.find(c=>c.name===name);
-  if(!existing){ existing={name,children:[]}; parent.children.push(existing);}
-  return existing;
-}
+    function splitText(text, maxChars = MAX_CHARS_PER_LINE) {
+      const regex = new RegExp(`.{1,${maxChars}}`, "g");
+      return text.match(regex) || [];
+    }
 
-function collapse(d){
-  if(d.children){ d._children=d.children; d._children.forEach(collapse); d.children=null; }
-}
+    function rectWidth(d) {
+      const lines = splitText(d.data.name);
+      const maxLine = Math.max(...lines.map((l) => l.length));
+      return Math.max(
+        maxLine * CHAR_WIDTH + RECT_MARGIN_H,
+        MAX_CHARS_PER_LINE * CHAR_WIDTH + RECT_MARGIN_H
+      );
+    }
 
-function focusOnNode(d){
-  const scale=1.5;
-  svg.transition().duration(750)
-    .call(zoom.transform,d3.zoomIdentity
-      .translate(document.getElementById("tree-container").clientWidth/2 - d.y*scale,
-                 document.getElementById("tree-container").clientHeight/2 - d.x*scale)
-      .scale(scale));
-}
+    function rectHeight(d) {
+      const lines = splitText(d.data.name);
+      return lines.length * LINE_HEIGHT + RECT_MARGIN_V;
+    }
 
-// === TREE LAYOUT con separación dinámica según altura ===
-const treeLayout = d3.tree()
-  .nodeSize([70, 200])
-  .separation((a, b) => {
-    return (a.parent === b.parent ? 1 : 1.5) +
-           (rectHeight(a) + rectHeight(b)) / 120;
-  });
+    function findOrCreate(parent, name) {
+      if (!parent.children) parent.children = [];
+      let existing = parent.children.find((c) => c.name === name);
+      if (!existing) {
+        existing = { name, children: [] };
+        parent.children.push(existing);
+      }
+      return existing;
+    }
 
-function update(source){
-  treeLayout(rootNode);
+    function collapse(d) {
+      if (d.children) {
+        d._children = d.children;
+        d._children.forEach(collapse);
+        d.children = null;
+      }
+    }
 
-  const link = viewport.selectAll(".link")
-    .data(rootNode.links(), d=>d.target.id);
+    function focusOnNode(d) {
+      const scale = 1.5;
+      svg
+        .transition()
+        .duration(750)
+        .call(
+          zoom.transform,
+          d3.zoomIdentity
+            .translate(
+              document.getElementById("tree-container").clientWidth / 2 - d.y * scale,
+              document.getElementById("tree-container").clientHeight / 2 - d.x * scale
+            )
+            .scale(scale)
+        );
+    }
 
-  link.exit().transition().duration(750).style("opacity",0).remove();
-  link.enter().append("path").attr("class","link")
-    .merge(link)
-    .transition().duration(750)
-    .attr("d", d=>{
-      const sourceWidth=rectWidth(d.source);
-      return d3.linkHorizontal()
-        .x(n=>n.y+(n===d.source?sourceWidth:0))
-        .y(n=>n.x)(d);
-    });
+    // Tree layout con tamaño total definido (alto, ancho) y separación fija vertical
+    const treeLayout = d3
+      .tree()
+      .size([height, width - 400]) // Ancho menos margen para nodos
+      .separation((a, b) => (a.parent === b.parent ? 1 : 1.5));
 
-  const node = viewport.selectAll(".node")
-    .data(rootNode.descendants(), d=>d.id||(d.id=++i));
+    function update(source) {
+      treeLayout(rootNode);
 
-  const nodeEnter=node.enter().append("g")
-    .attr("class","node")
-    .attr("transform",d=>`translate(${source.y0||0},${source.x0||0})`)
-    .style("opacity",0)
-    .on("click",(e,d)=>{
-      if(d.children){d._children=d.children; d.children=null;}
-      else if(d._children){d.children=d._children; d._children=null;}
-      update(d); focusOnNode(d);
-    });
+      // Links
+      const link = viewport.selectAll(".link").data(rootNode.links(), (d) => d.target.id);
 
-  nodeEnter.append("rect")
-    .attr("rx",6).attr("ry",6)
-    .attr("width", rectWidth)
-    .attr("height", rectHeight);
+      link
+        .exit()
+        .transition()
+        .duration(750)
+        .style("opacity", 0)
+        .remove();
 
-  nodeEnter.each(function(d){
-    const g=d3.select(this), lines=splitText(d.data.name);
-    lines.forEach((line,i)=>{
-      g.append("text").attr("x",10).attr("y",i*LINE_HEIGHT+20).text(line);
-    });
-  });
+      link
+        .enter()
+        .append("path")
+        .attr("class", "link")
+        .merge(link)
+        .transition()
+        .duration(750)
+        .attr("d", (d) => {
+          // Mueve el inicio del enlace según ancho del nodo padre
+          const sourceWidth = rectWidth(d.source);
+          return d3
+            .linkHorizontal()
+            .x((n) => n.y + (n === d.source ? sourceWidth : 0))
+            .y((n) => n.x)(d);
+        });
 
-  nodeEnter.merge(node).transition().duration(750)
-    .attr("transform",d=>`translate(${d.y},${d.x})`).style("opacity",1);
+      // Nodos
+      const node = viewport.selectAll(".node").data(rootNode.descendants(), (d) => d.id || (d.id = ++i));
 
-  node.exit().transition().duration(750)
-    .attr("transform",d=>`translate(${source.y},${source.x})`).style("opacity",0).remove();
+      // Nodo nuevo
+      const nodeEnter = node
+        .enter()
+        .append("g")
+        .attr("class", "node")
+        .attr("transform", (d) => `translate(${source.y0 || 0},${source.x0 || 0})`)
+        .style("opacity", 0)
+        .on("click", (event, d) => {
+          if (d.children) {
+            d._children = d.children;
+            d.children = null;
+          } else if (d._children) {
+            d.children = d._children;
+            d._children = null;
+          }
+          update(d);
+          focusOnNode(d);
+        });
 
-  rootNode.descendants().forEach(d=>{d.x0=d.x; d.y0=d.y;});
+      nodeEnter
+        .append("rect")
+        .attr("rx", 6)
+        .attr("ry", 6)
+        .attr("width", rectWidth)
+        .attr("height", rectHeight);
 
-  if(source===rootNode){
-    const box=viewport.node().getBBox();
-    const scale=Math.min(
-      document.getElementById("tree-container").clientWidth/box.width,
-      document.getElementById("tree-container").clientHeight/box.height,
-      1.5
-    );
-    const translateX=(document.getElementById("tree-container").clientWidth - box.width*scale)/2 - box.x*scale;
-    const translateY=20;
-    svg.transition().duration(750)
-      .call(zoom.transform,d3.zoomIdentity.translate(translateX,translateY).scale(scale));
-  }
-}
-
-function loadFromFile(){
-  const input=document.getElementById('fileInput');
-  if(!input.files.length){alert("Seleccione un CSV");return;}
-  const reader=new FileReader();
-  reader.onload=function(e){
-    const text=e.target.result;
-    const data=d3.csvParse(text);
-    const treeData={name:"Empresas",children:[]};
-    data.forEach(row=>{
-      const vendedor=row["Vendedor"]?.trim()||"Sin Vendedor";
-      const fecha=row["Fecha de Status"]?.trim()||"Sin Fecha";
-      const cliente=row["Cliente"]?.trim()||"Sin Cliente";
-      const pais=row["País"]?.trim()||"Sin País";
-      const tipo=row["Tipo de Proyecto"]?.trim()||"Sin Tipo";
-      const estado=row["Estado"]?.trim()||"Sin Estado";
-      const responsable=row["Responsable"]?.trim()||"Sin Responsable";
-      const status=row["Status"]?.trim()||"Sin Status";
-
-      const vNode=findOrCreate(treeData,vendedor);
-      const fNode=findOrCreate(vNode,fecha);
-      const cNode=findOrCreate(fNode,cliente);
-      [pais,tipo,estado,responsable,status].forEach(n=>{
-        if(!cNode.children.find(c=>c.name===n))
-          cNode.children.push({name:n,children:[]});
+      nodeEnter.each(function (d) {
+        const g = d3.select(this),
+          lines = splitText(d.data.name);
+        lines.forEach((line, i) => {
+          g.append("text").attr("x", 10).attr("y", i * LINE_HEIGHT + 20).text(line);
+        });
       });
-    });
-    rootNode=d3.hierarchy(treeData);
-    rootNode.x0=height/2; rootNode.y0=0;
-    rootNode.children.forEach(collapse);
-    update(rootNode);
-  };
-  reader.readAsText(input.files[0]);
-}
-</script>
+
+      // Actualizar posición nodos existentes y nuevos
+      nodeEnter
+        .merge(node)
+        .transition()
+        .duration(750)
+        .attr("transform", (d) => `translate(${d.y},${d.x})`)
+        .style("opacity", 1);
+
+      node
+        .exit()
+        .transition()
+        .duration(750)
+        .attr("transform", (d) => `translate(${source.y},${source.x})`)
+        .style("opacity", 0)
+        .remove();
+
+      rootNode.descendants().forEach((d) => {
+        d.x0 = d.x;
+        d.y0 = d.y;
+      });
+
+      if (source === rootNode) {
+        const box = viewport.node().getBBox();
+        const scale = Math.min(
+          document.getElementById("tree-container").clientWidth / box.width,
+          document.getElementById("tree-container").clientHeight / box.height,
+          1.5
+        );
+        const translateX = (document.getElementById("tree-container").clientWidth - box.width * scale) / 2 - box.x * scale;
+        const translateY = 20;
+        svg
+          .transition()
+          .duration(750)
+          .call(zoom.transform, d3.zoomIdentity.translate(translateX, translateY).scale(scale));
+      }
+    }
+
+    function loadFromFile() {
+      const input = document.getElementById("fileInput");
+      if (!input.files.length) {
+        alert("Seleccione un CSV");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const text = e.target.result;
+        const data = d3.csvParse(text);
+        const treeData = { name: "Empresas", children: [] };
+        data.forEach((row) => {
+          const vendedor = row["Vendedor"]?.trim() || "Sin Vendedor";
+          const fecha = row["Fecha de Status"]?.trim() || "Sin Fecha";
+          const cliente = row["Cliente"]?.trim() || "Sin Cliente";
+          const pais = row["País"]?.trim() || "Sin País";
+          const tipo = row["Tipo de Proyecto"]?.trim() || "Sin Tipo";
+          const estado = row["Estado"]?.trim() || "Sin Estado";
+          const responsable = row["Responsable"]?.trim() || "Sin Responsable";
+          const status = row["Status"]?.trim() || "Sin Status";
+
+          const vNode = findOrCreate(treeData, vendedor);
+          const fNode = findOrCreate(vNode, fecha);
+          const cNode = findOrCreate(fNode, cliente);
+
+          [pais, tipo, estado, responsable, status].forEach((n) => {
+            if (!cNode.children.find((c) => c.name === n)) cNode.children.push({ name: n, children: [] });
+          });
+        });
+        rootNode = d3.hierarchy(treeData);
+        rootNode.x0 = height / 2;
+        rootNode.y0 = 0;
+        rootNode.children.forEach(collapse);
+        update(rootNode);
+      };
+      reader.readAsText(input.files[0]);
+    }
+  </script>
 </body>
 </html>
