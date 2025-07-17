@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Mapa Conceptual Ajustado</title>
+  <title>Mapa Conceptual Mejorado</title>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&display=swap" rel="stylesheet">
   <style>
     body {
@@ -48,7 +48,7 @@
   </style>
 </head>
 <body>
-<h2>Mapa Conceptual Ajustado</h2>
+<h2>Mapa Conceptual Mejorado</h2>
 <input type="file" id="fileInput" accept=".csv">
 <button onclick="loadFromFile()">Cargar CSV</button>
 <div id="tree-container"><svg id="tree"><g id="viewport"></g></svg></div>
@@ -70,14 +70,19 @@ const CHAR_WIDTH = 9;
 const LINE_HEIGHT = 20;
 const RECT_MARGIN_H = 40;
 const RECT_MARGIN_V = 10;
-const EXTRA_VERTICAL_GAP = 25;
 
 function splitText(text, maxChars=MAX_CHARS_PER_LINE){
   const regex=new RegExp(`.{1,${maxChars}}`,'g');
   return text.match(regex)||[];
 }
 
-function rectWidth(d){ return MAX_CHARS_PER_LINE*CHAR_WIDTH+RECT_MARGIN_H; }
+function rectWidth(d){ 
+  // Ajuste dinámico para que los nodos largos tengan más ancho si es necesario
+  const lines = splitText(d.data.name);
+  const maxLine = Math.max(...lines.map(l => l.length));
+  return Math.max(maxLine * CHAR_WIDTH + RECT_MARGIN_H, MAX_CHARS_PER_LINE * CHAR_WIDTH + RECT_MARGIN_H);
+}
+
 function rectHeight(d){
   const lines = splitText(d.data.name);
   return lines.length*LINE_HEIGHT+RECT_MARGIN_V;
@@ -103,35 +108,16 @@ function focusOnNode(d){
       .scale(scale));
 }
 
-const treeLayout=d3.tree().nodeSize([70,200]);
-
-// === CORRECCIÓN DE ESPACIADO ===
-function adjustVerticalSpacing(root){
-  root.eachAfter(node=>{
-    if(node.children && node.children.length>1){
-      node.children.forEach((child,idx)=>{
-        if(idx>0){
-          const prev=node.children[idx-1];
-          const desired = prev.x + rectHeight(prev)/2 + rectHeight(child)/2 + EXTRA_VERTICAL_GAP;
-          if(child.x<desired){
-            const shift = desired - child.x;
-            moveSubtree(child, shift);
-          }
-        }
-      });
-    }
+// === TREE LAYOUT con separación dinámica según altura ===
+const treeLayout = d3.tree()
+  .nodeSize([70, 200])
+  .separation((a, b) => {
+    return (a.parent === b.parent ? 1 : 1.5) +
+           (rectHeight(a) + rectHeight(b)) / 120;
   });
-}
-
-function moveSubtree(node, shift){
-  node.x+=shift;
-  if(node.children) node.children.forEach(c=>moveSubtree(c, shift));
-  if(node._children) node._children.forEach(c=>moveSubtree(c, shift));
-}
 
 function update(source){
   treeLayout(rootNode);
-  adjustVerticalSpacing(rootNode);
 
   const link = viewport.selectAll(".link")
     .data(rootNode.links(), d=>d.target.id);
@@ -161,9 +147,9 @@ function update(source){
     });
 
   nodeEnter.append("rect")
-    .attr("width",rectWidth)
-    .attr("height",rectHeight)
-    .attr("rx",6).attr("ry",6);
+    .attr("rx",6).attr("ry",6)
+    .attr("width", rectWidth)
+    .attr("height", rectHeight);
 
   nodeEnter.each(function(d){
     const g=d3.select(this), lines=splitText(d.data.name);
