@@ -82,7 +82,6 @@
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <script>
 const width = 2000, height = 2000;
-const treeLayout = d3.tree(); // nodeSize será asignado dinámicamente
 const svg = d3.select("#tree").attr("viewBox", [0, 0, width, height]);
 const viewport = d3.select("#viewport");
 
@@ -92,13 +91,17 @@ svg.call(zoom);
 
 let rootNode = null;
 let i = 0;
+const MAX_CHARS_PER_LINE = 40;
 
-function collapse(d) {
-  if (d.children) {
-    d._children = d.children;
-    d._children.forEach(collapse);
-    d.children = null;
-  }
+function splitText(text, maxChars = MAX_CHARS_PER_LINE) {
+  const regex = new RegExp(`.{1,${maxChars}}`, 'g');
+  return text.match(regex) || [];
+}
+
+function rectWidth(d) {
+  const lines = splitText(d.data.name);
+  const maxLine = Math.max(...lines.map(l => l.length));
+  return maxLine * 9 + 40;
 }
 
 function findOrCreate(parent, name) {
@@ -111,35 +114,46 @@ function findOrCreate(parent, name) {
   return existing;
 }
 
-function splitText(text, maxChars) {
-  const regex = new RegExp(`.{1,${maxChars}}`, 'g');
-  return text.match(regex) || [];
-}
-
-function rectWidth(d) {
-  const lines = splitText(d.data.name, 80);
-  const maxLine = Math.max(...lines.map(l => l.length));
-  return maxLine * 9 + 80; // padding horizontal extra
+function collapse(d) {
+  if (d.children) {
+    d._children = d.children;
+    d._children.forEach(collapse);
+    d.children = null;
+  }
 }
 
 function focusOnNode(d) {
   const scale = 1.5;
-  const x = d.y;
-  const y = d.x;
   svg.transition().duration(750)
-    .call(zoom.transform, d3.zoomIdentity.translate(
-      document.getElementById("tree-container").clientWidth / 2 - x * scale,
-      document.getElementById("tree-container").clientHeight / 2 - y * scale
-    ).scale(scale));
+    .call(zoom.transform, d3.zoomIdentity
+      .translate(
+        document.getElementById("tree-container").clientWidth / 2 - d.y * scale,
+        document.getElementById("tree-container").clientHeight / 2 - d.x * scale
+      )
+      .scale(scale));
 }
 
+const treeLayout = d3.tree();
+
 function update(source) {
-  // Calcular el máximo ancho de cualquier nodo para definir nodeSize dinámicamente
   const allNodes = rootNode.descendants();
   const maxNodeWidth = Math.max(...allNodes.map(rectWidth));
-  treeLayout.nodeSize([70, maxNodeWidth + 120]); // margen horizontal +120 para evitar superposiciones
 
+  // 🔥 Espaciado horizontal base (como antes)
+  treeLayout.nodeSize([70, maxNodeWidth + 120]);
   treeLayout(rootNode);
+
+  // ✅ 🔥 Ajuste dinámico VERTICAL por nodo hijo
+  rootNode.eachAfter(d => {
+    if (d.children && d.children.length > 1) {
+      let offset = 0;
+      d.children.forEach(child => {
+        const height = splitText(child.data.name).length * 20 + 10;
+        child.x += offset;
+        offset += height + 30; // 30px de margen vertical
+      });
+    }
+  });
 
   const nodes = rootNode.descendants();
   const links = rootNode.links();
@@ -153,8 +167,7 @@ function update(source) {
     .append("path")
     .attr("class", "link")
     .merge(link)
-    .transition()
-    .duration(750)
+    .transition().duration(750)
     .attr("d", d => {
       const sourceWidth = rectWidth(d.source);
       return d3.linkHorizontal()
@@ -185,7 +198,7 @@ function update(source) {
   nodeEnter.append("rect")
     .attr("width", rectWidth)
     .attr("height", d => {
-      const lines = splitText(d.data.name, 85);
+      const lines = splitText(d.data.name);
       return lines.length * 20 + 10;
     })
     .attr("x", 0)
@@ -195,7 +208,7 @@ function update(source) {
 
   nodeEnter.each(function(d) {
     const g = d3.select(this);
-    const lines = splitText(d.data.name, 85);
+    const lines = splitText(d.data.name);
     lines.forEach((line, i) => {
       g.append("text")
         .attr("x", 10)
@@ -206,7 +219,6 @@ function update(source) {
   });
 
   const nodeUpdate = nodeEnter.merge(node);
-
   nodeUpdate.transition()
     .duration(750)
     .attr("transform", d => `translate(${d.y},${d.x})`)
@@ -222,7 +234,7 @@ function update(source) {
     d.y0 = d.y;
   });
 
-  // ---- ZOOM AUTOMÁTICO SOLO EN INICIAL ----
+  // 🔥 Zoom inicial solo al cargar todo
   if (source === rootNode) {
     const box = viewport.node().getBBox();
     const scale = Math.min(
