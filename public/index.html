@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <title>Mapa Conceptual Animado</title>
 
-  <!-- Fuente Nunito -->
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&display=swap" rel="stylesheet">
 
   <style>
@@ -15,10 +14,7 @@
       color: #f0f0f0;
     }
 
-    h2 {
-      color: #bb86fc;
-      letter-spacing: 0.5px;
-    }
+    h2 { color: #bb86fc; }
 
     input, button {
       background-color: #1e1e1e;
@@ -27,10 +23,6 @@
       padding: 8px 12px;
       border-radius: 6px;
       margin-right: 10px;
-    }
-
-    input:hover, button:hover {
-      background-color: #2a2a2a;
     }
 
     #tree-container {
@@ -43,10 +35,7 @@
       border-radius: 8px;
     }
 
-    svg {
-      width: 100%;
-      height: 100%;
-    }
+    svg { width: 100%; height: 100%; }
 
     .node rect {
       fill: #bb86fc;
@@ -70,7 +59,6 @@
   </style>
 </head>
 <body>
-
 <h2>Mapa Conceptual Animado</h2>
 <input type="file" id="fileInput" accept=".csv" />
 <button onclick="loadFromFile()">Cargar CSV y Generar Grafo</button>
@@ -104,6 +92,11 @@ function rectWidth(d) {
   return maxLine * 9 + 40;
 }
 
+function rectHeight(d) {
+  const lines = splitText(d.data.name);
+  return lines.length * 20 + 10;
+}
+
 function findOrCreate(parent, name) {
   if (!parent.children) parent.children = [];
   let existing = parent.children.find(c => c.name === name);
@@ -133,51 +126,37 @@ function focusOnNode(d) {
       .scale(scale));
 }
 
-// ---- Tree Layout con separación dinámica ----
+// ✅ Vuelve al método estable con nodeSize()
 const treeLayout = d3.tree();
 
 function update(source) {
   const allNodes = rootNode.descendants();
   const maxNodeWidth = Math.max(...allNodes.map(rectWidth));
 
-  // 🔥 Nueva separación dinámica
-  treeLayout
-    .nodeSize([1, maxNodeWidth + 120])
-    .separation((a, b) => {
-      if (a.parent === b.parent) {
-        const aHeight = splitText(a.data.name).length * 20 + 30;
-        const bHeight = splitText(b.data.name).length * 20 + 30;
-        return (aHeight + bHeight) / 70; // separación proporcional
-      }
-      return 1.5; // ramas distintas más separadas
-    });
+  treeLayout.nodeSize([70, maxNodeWidth + 120]); 
 
   treeLayout(rootNode);
 
-  // ---- LINKS ----
   const links = rootNode.links();
   const link = viewport.selectAll(".link").data(links, d => d.target.id);
 
   link.exit().transition().duration(750).style("opacity", 0).remove();
 
-  link.enter()
-    .append("path")
+  link.enter().append("path")
     .attr("class", "link")
     .merge(link)
     .transition().duration(750)
     .attr("d", d => {
       const sourceWidth = rectWidth(d.source);
       return d3.linkHorizontal()
-        .x(node => node.y + (node === d.source ? sourceWidth : 0))
-        .y(node => node.x)(d);
+        .x(n => n.y + (n === d.source ? sourceWidth : 0))
+        .y(n => n.x)(d);
     });
 
-  // ---- NODES ----
   const nodes = rootNode.descendants();
   const node = viewport.selectAll(".node").data(nodes, d => d.id || (d.id = ++i));
 
-  const nodeEnter = node.enter()
-    .append("g")
+  const nodeEnter = node.enter().append("g")
     .attr("class", "node")
     .attr("transform", d => `translate(${source.y0 || 0},${source.x0 || 0})`)
     .style("opacity", 0)
@@ -195,14 +174,10 @@ function update(source) {
 
   nodeEnter.append("rect")
     .attr("width", rectWidth)
-    .attr("height", d => {
-      const lines = splitText(d.data.name);
-      return lines.length * 20 + 10;
-    })
+    .attr("height", rectHeight)
     .attr("x", 0)
     .attr("y", 0)
-    .attr("rx", 6)
-    .attr("ry", 6);
+    .attr("rx", 6).attr("ry", 6);
 
   nodeEnter.each(function(d) {
     const g = d3.select(this);
@@ -211,7 +186,6 @@ function update(source) {
       g.append("text")
         .attr("x", 10)
         .attr("y", i * 20 + 20)
-        .style("text-anchor", "start")
         .text(line);
     });
   });
@@ -227,12 +201,8 @@ function update(source) {
     .style("opacity", 0)
     .remove();
 
-  nodes.forEach(d => {
-    d.x0 = d.x;
-    d.y0 = d.y;
-  });
+  nodes.forEach(d => { d.x0 = d.x; d.y0 = d.y; });
 
-  // 🔥 Zoom inicial al cargar todo
   if (source === rootNode) {
     const box = viewport.node().getBBox();
     const scale = Math.min(
@@ -259,7 +229,6 @@ function loadFromFile() {
     const text = e.target.result;
     try {
       const data = d3.csvParse(text);
-
       const treeData = { name: "Empresas", children: [] };
 
       data.forEach(row => {
@@ -296,6 +265,5 @@ function loadFromFile() {
   reader.readAsText(file);
 }
 </script>
-
 </body>
 </html>
