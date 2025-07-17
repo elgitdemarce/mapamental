@@ -126,16 +126,33 @@ function focusOnNode(d) {
       .scale(scale));
 }
 
-// ✅ Vuelve al método estable con nodeSize()
 const treeLayout = d3.tree();
+
+function adjustVerticalSpacing(root) {
+  root.eachAfter(node => {
+    if (node.children && node.children.length > 1) {
+      const siblings = node.children;
+      let yOffset = 0;
+      siblings.forEach((child, idx) => {
+        if (idx > 0) {
+          const prev = siblings[idx - 1];
+          const gap = (rectHeight(prev) + rectHeight(child)) / 2 + 20; 
+          child.x = prev.x + gap;
+        }
+      });
+    }
+  });
+}
 
 function update(source) {
   const allNodes = rootNode.descendants();
   const maxNodeWidth = Math.max(...allNodes.map(rectWidth));
 
-  treeLayout.nodeSize([70, maxNodeWidth + 120]); 
-
+  treeLayout.nodeSize([70, maxNodeWidth + 120]);
   treeLayout(rootNode);
+
+  // 🔥 Ajuste vertical dinámico para hermanos
+  adjustVerticalSpacing(rootNode);
 
   const links = rootNode.links();
   const link = viewport.selectAll(".link").data(links, d => d.target.id);
