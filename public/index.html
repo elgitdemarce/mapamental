@@ -141,13 +141,15 @@
     // Crear layout sin tamaño fijo para que nodos queden "apilados"
     const treeLayout = d3.tree();
 
-    // Ajustar la posición horizontal acumulando anchos ancestros
+    // Ajustar la posición horizontal acumulando anchos ancestros + margen extra
     function adjustPositions(root) {
+      const HORIZONTAL_MARGIN = 80; // margen extra entre niveles
+
       root.each(d => {
         let offset = 0;
         let ancestor = d.parent;
         while (ancestor) {
-          offset += rectWidth(ancestor);
+          offset += rectWidth(ancestor) + HORIZONTAL_MARGIN;  // sumo ancho + margen
           ancestor = ancestor.parent;
         }
         d.y = offset;
