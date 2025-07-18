@@ -70,7 +70,6 @@
 
     svg.call(zoom);
 
-    // Constantes para tamaño y formato
     const CHAR_WIDTH = 9;
     const LINE_HEIGHT = 20;
     const RECT_MARGIN_H = 40;
@@ -79,30 +78,25 @@
     const MIN_NODE_WIDTH = 150;
     const MIN_NODE_HEIGHT = 40;
 
-    // Variables para el layout
     let rootNode = null, i = 0;
 
-    // Función para dividir texto en líneas
     function splitText(text, maxChars = MAX_CHARS_PER_LINE) {
       if (!text) return [""];
       const regex = new RegExp(`.{1,${maxChars}}`, "g");
       return text.match(regex) || [text];
     }
 
-    // Calcular ancho del nodo según texto
     function rectWidth(d) {
       const lines = splitText(d.data.name);
       const maxLineLength = Math.max(...lines.map(l => l.length));
       return Math.max(MIN_NODE_WIDTH, maxLineLength * CHAR_WIDTH + RECT_MARGIN_H);
     }
 
-    // Calcular alto del nodo según líneas de texto
     function rectHeight(d) {
       const lines = splitText(d.data.name);
       return Math.max(MIN_NODE_HEIGHT, lines.length * LINE_HEIGHT + RECT_MARGIN_V);
     }
 
-    // Encontrar o crear hijo con nombre dado
     function findOrCreate(parent, name) {
       if (!parent.children) parent.children = [];
       let existing = parent.children.find(c => c.name === name);
@@ -113,7 +107,6 @@
       return existing;
     }
 
-    // Colapsar nodos para iniciar
     function collapse(d) {
       if (d.children) {
         d._children = d.children;
@@ -122,7 +115,6 @@
       }
     }
 
-    // Función para enfocar un nodo haciendo zoom
     function focusOnNode(d) {
       const scale = 1.5;
       svg.transition()
@@ -138,74 +130,57 @@
         );
     }
 
-    // Crear layout sin tamaño fijo para que nodos queden "apilados"
     const treeLayout = d3.tree();
 
-    // Ajustar la posición horizontal acumulando anchos ancestros + margen extra
     function adjustPositions(root) {
-      const HORIZONTAL_MARGIN = 80; // margen extra entre niveles
+      const HORIZONTAL_MARGIN = 160; // <<< MAYOR SEPARACIÓN HORIZONTAL
 
       root.each(d => {
         let offset = 0;
         let ancestor = d.parent;
         while (ancestor) {
-          offset += rectWidth(ancestor) + HORIZONTAL_MARGIN;  // sumo ancho + margen
+          offset += rectWidth(ancestor) + HORIZONTAL_MARGIN;
           ancestor = ancestor.parent;
         }
         d.y = offset;
       });
     }
 
-    // NUEVA FUNCIÓN PARA AJUSTAR POSICIONES VERTICALES SEGÚN ALTURA VARIABLE y evitar superposiciones verticales
     function adjustVerticalPositions(root) {
-      // Agrupar nodos por nivel (profundidad)
+      const VERTICAL_MARGIN = 50; // <<< MAYOR SEPARACIÓN VERTICAL
+
       const levels = {};
       root.each(d => {
         if (!levels[d.depth]) levels[d.depth] = [];
         levels[d.depth].push(d);
       });
 
-      // Para cada nivel ordenar nodos por y y ajustar x acumulando alturas para evitar solapamiento
       Object.values(levels).forEach(levelNodes => {
-        // Ordenar por posición y (horizontal)
         levelNodes.sort((a, b) => a.y - b.y);
 
-        // Para nodos en este nivel que pueden solaparse verticalmente ajustamos d.x (vertical)
-        // Usamos un "rastro" de alturas acumuladas para desplazar nodos que se enciman
         let currentX = 0;
         for (let i = 0; i < levelNodes.length; i++) {
           const node = levelNodes[i];
           if (i === 0) {
-            node.x = 0; // inicial para el primer nodo
-            currentX = node.x + rectHeight(node) + 15; // espacio extra entre nodos
+            node.x = 0;
+            currentX = node.x + rectHeight(node) + VERTICAL_MARGIN;
           } else {
-            if (node.x < currentX) node.x = currentX; // si está encimado, desplazamos
-            currentX = node.x + rectHeight(node) + 15;
+            if (node.x < currentX) node.x = currentX;
+            currentX = node.x + rectHeight(node) + VERTICAL_MARGIN;
           }
         }
       });
     }
 
-    // Función principal update
     function update(source) {
-      // Calculamos layout base sin tamaño fijo
       treeLayout(rootNode);
-
-      // Ajustamos posiciones horizontales (y) para evitar solapamientos en eje horizontal
       adjustPositions(rootNode);
-
-      // Ajustamos posiciones verticales (x) para evitar solapamientos verticales por altura variable
       adjustVerticalPositions(rootNode);
 
-      // Generamos links
       const links = rootNode.links();
       const link = viewport.selectAll(".link").data(links, d => d.target.id);
 
-      link.exit()
-        .transition()
-        .duration(750)
-        .style("opacity", 0)
-        .remove();
+      link.exit().transition().duration(750).style("opacity", 0).remove();
 
       const linkEnter = link.enter()
         .append("path")
@@ -223,11 +198,9 @@
             .y(n => n.x)(d);
         });
 
-      // Generamos nodos
       const nodes = rootNode.descendants();
       const node = viewport.selectAll(".node").data(nodes, d => d.id || (d.id = ++i));
 
-      // Nodos nuevos
       const nodeEnter = node.enter()
         .append("g")
         .attr("class", "node")
@@ -245,14 +218,12 @@
           focusOnNode(d);
         });
 
-      // Rectángulos
       nodeEnter.append("rect")
         .attr("rx", 6)
         .attr("ry", 6)
         .attr("width", rectWidth)
         .attr("height", rectHeight);
 
-      // Textos con envoltura manual
       nodeEnter.each(function (d) {
         const g = d3.select(this);
         const lines = splitText(d.data.name);
@@ -261,7 +232,6 @@
         });
       });
 
-      // Actualizar posición nodos existentes y nuevos con transición
       nodeEnter.merge(node)
         .transition()
         .duration(750)
@@ -275,13 +245,11 @@
         .style("opacity", 0)
         .remove();
 
-      // Guardar posiciones para transiciones futuras
       rootNode.descendants().forEach(d => {
         d.x0 = d.x;
         d.y0 = d.y;
       });
 
-      // Ajuste zoom y centrado automático al nodo raíz
       if (source === rootNode) {
         const box = viewport.node().getBBox();
         const containerWidth = document.getElementById("tree-container").clientWidth;
@@ -302,7 +270,6 @@
       }
     }
 
-    // Cargar CSV desde archivo local
     function loadFromFile() {
       const input = document.getElementById("fileInput");
       if (!input.files.length) {
