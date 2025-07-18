@@ -72,7 +72,7 @@
 
     const CHAR_WIDTH = 9;
     const LINE_HEIGHT = 20;
-    const RECT_MARGIN_H = 40;
+    const RECT_MARGIN_H = 70;
     const RECT_MARGIN_V = 10;
     const MAX_CHARS_PER_LINE = 45;
     const MIN_NODE_WIDTH = 150;
@@ -133,7 +133,7 @@
     const treeLayout = d3.tree();
 
     function adjustPositions(root) {
-      const HORIZONTAL_MARGIN = 360; // <<< MAYOR SEPARACIÓN HORIZONTAL
+      const HORIZONTAL_MARGIN = 660; // <<< MAYOR SEPARACIÓN HORIZONTAL
 
       root.each(d => {
         let offset = 0;
