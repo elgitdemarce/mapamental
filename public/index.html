@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Mapa Conceptual con Layout Flexible</title>
+  <title>Mapa Conceptual con Ajuste Manual de Posición</title>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&display=swap" rel="stylesheet" />
   <style>
     body {
@@ -50,7 +50,7 @@
   </style>
 </head>
 <body>
-  <h2>Mapa Conceptual con Layout Flexible</h2>
+  <h2>Mapa Conceptual con Ajuste Manual de Posición</h2>
   <input type="file" id="fileInput" accept=".csv" />
   <button onclick="loadFromFile()">Cargar CSV</button>
   <div id="tree-container">
@@ -61,9 +61,6 @@
 
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <script>
-    const width = 2000;
-    const height = 2000;
-
     const svg = d3.select("#tree");
     const viewport = d3.select("#viewport");
 
@@ -73,13 +70,15 @@
 
     svg.call(zoom);
 
-    let rootNode = null, i = 0;
-
-    const MAX_CHARS_PER_LINE = 45;
+    const NODE_HEIGHT = 70;  // fijo para la separación vertical
+    const MIN_NODE_WIDTH = 150; // mínimo ancho base de nodo
     const CHAR_WIDTH = 9;
     const LINE_HEIGHT = 20;
     const RECT_MARGIN_H = 40;
     const RECT_MARGIN_V = 10;
+    const MAX_CHARS_PER_LINE = 45;
+
+    let rootNode = null, i = 0;
 
     function splitText(text, maxChars = MAX_CHARS_PER_LINE) {
       const regex = new RegExp(`.{1,${maxChars}}`, "g");
@@ -88,11 +87,8 @@
 
     function rectWidth(d) {
       const lines = splitText(d.data.name);
-      const maxLine = Math.max(...lines.map((l) => l.length));
-      return Math.max(
-        maxLine * CHAR_WIDTH + RECT_MARGIN_H,
-        MAX_CHARS_PER_LINE * CHAR_WIDTH + RECT_MARGIN_H
-      );
+      const maxLineLength = Math.max(...lines.map(l => l.length));
+      return Math.max(minWidth = MIN_NODE_WIDTH, maxLineLength * CHAR_WIDTH + RECT_MARGIN_H);
     }
 
     function rectHeight(d) {
@@ -102,7 +98,7 @@
 
     function findOrCreate(parent, name) {
       if (!parent.children) parent.children = [];
-      let existing = parent.children.find((c) => c.name === name);
+      let existing = parent.children.find(c => c.name === name);
       if (!existing) {
         existing = { name, children: [] };
         parent.children.push(existing);
@@ -120,8 +116,7 @@
 
     function focusOnNode(d) {
       const scale = 1.5;
-      svg
-        .transition()
+      svg.transition()
         .duration(750)
         .call(
           zoom.transform,
@@ -134,50 +129,64 @@
         );
     }
 
-    // Tree layout con tamaño total definido (alto, ancho) y separación fija vertical
-    const treeLayout = d3
-      .tree()
-      .size([height, width - 400]) // Ancho menos margen para nodos
-      .separation((a, b) => (a.parent === b.parent ? 1 : 1.5));
+    // Usamos nodeSize fijo para layout base
+    const treeLayout = d3.tree()
+      .nodeSize([NODE_HEIGHT, MIN_NODE_WIDTH]);
+
+    function adjustPositions(root) {
+      // Acumulamos anchos de ancestros para desplazar los nodos en Y (horizontal)
+      root.each(d => {
+        let offset = 0;
+        let ancestor = d.parent;
+        while (ancestor) {
+          offset += rectWidth(ancestor);
+          ancestor = ancestor.parent;
+        }
+        d.y = d.y + offset;
+      });
+    }
 
     function update(source) {
       treeLayout(rootNode);
 
-      // Links
-      const link = viewport.selectAll(".link").data(rootNode.links(), (d) => d.target.id);
+      adjustPositions(rootNode);
 
-      link
-        .exit()
+      // LINKS
+      const links = rootNode.links();
+      const link = viewport.selectAll(".link").data(links, d => d.target.id);
+
+      link.exit()
         .transition()
         .duration(750)
         .style("opacity", 0)
         .remove();
 
-      link
-        .enter()
+      const linkEnter = link.enter()
         .append("path")
         .attr("class", "link")
-        .merge(link)
+        .style("opacity", 0);
+
+      linkEnter.merge(link)
         .transition()
         .duration(750)
-        .attr("d", (d) => {
-          // Mueve el inicio del enlace según ancho del nodo padre
+        .style("opacity", 1)
+        .attr("d", d => {
+          // Para los links, el punto origen se desplaza al borde derecho del nodo padre (d.source)
           const sourceWidth = rectWidth(d.source);
-          return d3
-            .linkHorizontal()
-            .x((n) => n.y + (n === d.source ? sourceWidth : 0))
-            .y((n) => n.x)(d);
+          return d3.linkHorizontal()
+            .x(n => n.y + (n === d.source ? sourceWidth : 0))
+            .y(n => n.x)(d);
         });
 
-      // Nodos
-      const node = viewport.selectAll(".node").data(rootNode.descendants(), (d) => d.id || (d.id = ++i));
+      // NODOS
+      const nodes = rootNode.descendants();
+      const node = viewport.selectAll(".node").data(nodes, d => d.id || (d.id = ++i));
 
       // Nodo nuevo
-      const nodeEnter = node
-        .enter()
+      const nodeEnter = node.enter()
         .append("g")
         .attr("class", "node")
-        .attr("transform", (d) => `translate(${source.y0 || 0},${source.x0 || 0})`)
+        .attr("transform", d => `translate(${source.y0 || 0},${source.x0 || 0})`)
         .style("opacity", 0)
         .on("click", (event, d) => {
           if (d.children) {
@@ -191,53 +200,56 @@
           focusOnNode(d);
         });
 
-      nodeEnter
-        .append("rect")
+      nodeEnter.append("rect")
         .attr("rx", 6)
         .attr("ry", 6)
         .attr("width", rectWidth)
         .attr("height", rectHeight);
 
       nodeEnter.each(function (d) {
-        const g = d3.select(this),
-          lines = splitText(d.data.name);
+        const g = d3.select(this);
+        const lines = splitText(d.data.name);
         lines.forEach((line, i) => {
           g.append("text").attr("x", 10).attr("y", i * LINE_HEIGHT + 20).text(line);
         });
       });
 
       // Actualizar posición nodos existentes y nuevos
-      nodeEnter
-        .merge(node)
+      nodeEnter.merge(node)
         .transition()
         .duration(750)
-        .attr("transform", (d) => `translate(${d.y},${d.x})`)
+        .attr("transform", d => `translate(${d.y},${d.x})`)
         .style("opacity", 1);
 
-      node
-        .exit()
+      node.exit()
         .transition()
         .duration(750)
-        .attr("transform", (d) => `translate(${source.y},${source.x})`)
+        .attr("transform", d => `translate(${source.y},${source.x})`)
         .style("opacity", 0)
         .remove();
 
-      rootNode.descendants().forEach((d) => {
+      // Guardar posiciones para transición
+      rootNode.descendants().forEach(d => {
         d.x0 = d.x;
         d.y0 = d.y;
       });
 
+      // Ajuste automático zoom y centro
       if (source === rootNode) {
         const box = viewport.node().getBBox();
+        const containerWidth = document.getElementById("tree-container").clientWidth;
+        const containerHeight = document.getElementById("tree-container").clientHeight;
+
         const scale = Math.min(
-          document.getElementById("tree-container").clientWidth / box.width,
-          document.getElementById("tree-container").clientHeight / box.height,
+          containerWidth / box.width,
+          containerHeight / box.height,
           1.5
         );
-        const translateX = (document.getElementById("tree-container").clientWidth - box.width * scale) / 2 - box.x * scale;
+
+        const translateX = (containerWidth - box.width * scale) / 2 - box.x * scale;
         const translateY = 20;
-        svg
-          .transition()
+
+        svg.transition()
           .duration(750)
           .call(zoom.transform, d3.zoomIdentity.translate(translateX, translateY).scale(scale));
       }
@@ -246,7 +258,7 @@
     function loadFromFile() {
       const input = document.getElementById("fileInput");
       if (!input.files.length) {
-        alert("Seleccione un CSV");
+        alert("Seleccione un archivo CSV");
         return;
       }
       const reader = new FileReader();
@@ -254,7 +266,7 @@
         const text = e.target.result;
         const data = d3.csvParse(text);
         const treeData = { name: "Empresas", children: [] };
-        data.forEach((row) => {
+        data.forEach(row => {
           const vendedor = row["Vendedor"]?.trim() || "Sin Vendedor";
           const fecha = row["Fecha de Status"]?.trim() || "Sin Fecha";
           const cliente = row["Cliente"]?.trim() || "Sin Cliente";
@@ -268,12 +280,13 @@
           const fNode = findOrCreate(vNode, fecha);
           const cNode = findOrCreate(fNode, cliente);
 
-          [pais, tipo, estado, responsable, status].forEach((n) => {
-            if (!cNode.children.find((c) => c.name === n)) cNode.children.push({ name: n, children: [] });
+          [pais, tipo, estado, responsable, status].forEach(n => {
+            if (!cNode.children.find(c => c.name === n)) cNode.children.push({ name: n, children: [] });
           });
         });
+
         rootNode = d3.hierarchy(treeData);
-        rootNode.x0 = height / 2;
+        rootNode.x0 = 0;
         rootNode.y0 = 0;
         rootNode.children.forEach(collapse);
         update(rootNode);
