@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Mapa Conceptual con Ajuste Manual de Posición</title>
+  <title>Mapa Conceptual Mejorado</title>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&display=swap" rel="stylesheet" />
   <style>
     body {
@@ -50,7 +50,7 @@
   </style>
 </head>
 <body>
-  <h2>Mapa Conceptual con Ajuste Manual de Posición</h2>
+  <h2>Mapa Conceptual Mejorado</h2>
   <input type="file" id="fileInput" accept=".csv" />
   <button onclick="loadFromFile()">Cargar CSV</button>
   <div id="tree-container">
@@ -70,32 +70,39 @@
 
     svg.call(zoom);
 
-    const NODE_HEIGHT = 70;  // fijo para la separación vertical
-    const MIN_NODE_WIDTH = 150; // mínimo ancho base de nodo
+    // Constantes para tamaño y formato
     const CHAR_WIDTH = 9;
     const LINE_HEIGHT = 20;
     const RECT_MARGIN_H = 40;
     const RECT_MARGIN_V = 10;
     const MAX_CHARS_PER_LINE = 45;
+    const MIN_NODE_WIDTH = 150;
+    const MIN_NODE_HEIGHT = 40;
 
+    // Variables para el layout
     let rootNode = null, i = 0;
 
+    // Función para dividir texto en líneas
     function splitText(text, maxChars = MAX_CHARS_PER_LINE) {
+      if (!text) return [""];
       const regex = new RegExp(`.{1,${maxChars}}`, "g");
-      return text.match(regex) || [];
+      return text.match(regex) || [text];
     }
 
+    // Calcular ancho del nodo según texto
     function rectWidth(d) {
       const lines = splitText(d.data.name);
       const maxLineLength = Math.max(...lines.map(l => l.length));
-      return Math.max(minWidth = MIN_NODE_WIDTH, maxLineLength * CHAR_WIDTH + RECT_MARGIN_H);
+      return Math.max(MIN_NODE_WIDTH, maxLineLength * CHAR_WIDTH + RECT_MARGIN_H);
     }
 
+    // Calcular alto del nodo según líneas de texto
     function rectHeight(d) {
       const lines = splitText(d.data.name);
-      return lines.length * LINE_HEIGHT + RECT_MARGIN_V;
+      return Math.max(MIN_NODE_HEIGHT, lines.length * LINE_HEIGHT + RECT_MARGIN_V);
     }
 
+    // Encontrar o crear hijo con nombre dado
     function findOrCreate(parent, name) {
       if (!parent.children) parent.children = [];
       let existing = parent.children.find(c => c.name === name);
@@ -106,6 +113,7 @@
       return existing;
     }
 
+    // Colapsar nodos para iniciar
     function collapse(d) {
       if (d.children) {
         d._children = d.children;
@@ -114,6 +122,7 @@
       }
     }
 
+    // Función para enfocar un nodo haciendo zoom
     function focusOnNode(d) {
       const scale = 1.5;
       svg.transition()
@@ -129,12 +138,11 @@
         );
     }
 
-    // Usamos nodeSize fijo para layout base
-    const treeLayout = d3.tree()
-      .nodeSize([NODE_HEIGHT, MIN_NODE_WIDTH]);
+    // Crear layout sin tamaño fijo para que nodos queden "apilados"
+    const treeLayout = d3.tree();
 
+    // Ajustar la posición horizontal acumulando anchos ancestros
     function adjustPositions(root) {
-      // Acumulamos anchos de ancestros para desplazar los nodos en Y (horizontal)
       root.each(d => {
         let offset = 0;
         let ancestor = d.parent;
@@ -142,16 +150,52 @@
           offset += rectWidth(ancestor);
           ancestor = ancestor.parent;
         }
-        d.y = d.y + offset;
+        d.y = offset;
       });
     }
 
+    // NUEVA FUNCIÓN PARA AJUSTAR POSICIONES VERTICALES SEGÚN ALTURA VARIABLE y evitar superposiciones verticales
+    function adjustVerticalPositions(root) {
+      // Agrupar nodos por nivel (profundidad)
+      const levels = {};
+      root.each(d => {
+        if (!levels[d.depth]) levels[d.depth] = [];
+        levels[d.depth].push(d);
+      });
+
+      // Para cada nivel ordenar nodos por y y ajustar x acumulando alturas para evitar solapamiento
+      Object.values(levels).forEach(levelNodes => {
+        // Ordenar por posición y (horizontal)
+        levelNodes.sort((a, b) => a.y - b.y);
+
+        // Para nodos en este nivel que pueden solaparse verticalmente ajustamos d.x (vertical)
+        // Usamos un "rastro" de alturas acumuladas para desplazar nodos que se enciman
+        let currentX = 0;
+        for (let i = 0; i < levelNodes.length; i++) {
+          const node = levelNodes[i];
+          if (i === 0) {
+            node.x = 0; // inicial para el primer nodo
+            currentX = node.x + rectHeight(node) + 15; // espacio extra entre nodos
+          } else {
+            if (node.x < currentX) node.x = currentX; // si está encimado, desplazamos
+            currentX = node.x + rectHeight(node) + 15;
+          }
+        }
+      });
+    }
+
+    // Función principal update
     function update(source) {
+      // Calculamos layout base sin tamaño fijo
       treeLayout(rootNode);
 
+      // Ajustamos posiciones horizontales (y) para evitar solapamientos en eje horizontal
       adjustPositions(rootNode);
 
-      // LINKS
+      // Ajustamos posiciones verticales (x) para evitar solapamientos verticales por altura variable
+      adjustVerticalPositions(rootNode);
+
+      // Generamos links
       const links = rootNode.links();
       const link = viewport.selectAll(".link").data(links, d => d.target.id);
 
@@ -171,18 +215,17 @@
         .duration(750)
         .style("opacity", 1)
         .attr("d", d => {
-          // Para los links, el punto origen se desplaza al borde derecho del nodo padre (d.source)
           const sourceWidth = rectWidth(d.source);
           return d3.linkHorizontal()
             .x(n => n.y + (n === d.source ? sourceWidth : 0))
             .y(n => n.x)(d);
         });
 
-      // NODOS
+      // Generamos nodos
       const nodes = rootNode.descendants();
       const node = viewport.selectAll(".node").data(nodes, d => d.id || (d.id = ++i));
 
-      // Nodo nuevo
+      // Nodos nuevos
       const nodeEnter = node.enter()
         .append("g")
         .attr("class", "node")
@@ -200,12 +243,14 @@
           focusOnNode(d);
         });
 
+      // Rectángulos
       nodeEnter.append("rect")
         .attr("rx", 6)
         .attr("ry", 6)
         .attr("width", rectWidth)
         .attr("height", rectHeight);
 
+      // Textos con envoltura manual
       nodeEnter.each(function (d) {
         const g = d3.select(this);
         const lines = splitText(d.data.name);
@@ -214,7 +259,7 @@
         });
       });
 
-      // Actualizar posición nodos existentes y nuevos
+      // Actualizar posición nodos existentes y nuevos con transición
       nodeEnter.merge(node)
         .transition()
         .duration(750)
@@ -228,13 +273,13 @@
         .style("opacity", 0)
         .remove();
 
-      // Guardar posiciones para transición
+      // Guardar posiciones para transiciones futuras
       rootNode.descendants().forEach(d => {
         d.x0 = d.x;
         d.y0 = d.y;
       });
 
-      // Ajuste automático zoom y centro
+      // Ajuste zoom y centrado automático al nodo raíz
       if (source === rootNode) {
         const box = viewport.node().getBBox();
         const containerWidth = document.getElementById("tree-container").clientWidth;
@@ -255,6 +300,7 @@
       }
     }
 
+    // Cargar CSV desde archivo local
     function loadFromFile() {
       const input = document.getElementById("fileInput");
       if (!input.files.length) {
